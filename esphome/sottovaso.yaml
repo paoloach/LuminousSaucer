@@ -1,0 +1,128 @@
+esphome:
+  name: sottovasoluminoso
+  on_boot:
+    then:
+     - lambda: |-
+            ESP_LOGI("boot",  "set start light  %d:%d", id('start_hour'), id('start_minute'));
+            ESP_LOGI("boot",  "set end light  %d:%d", id('end_hour'), id('end_minute'));
+            auto time = id(sntp_time).now();
+            auto currentTime = time.minute+time.hour*60;
+            auto startTime = id(start_minute) + id(start_hour)*60;
+            auto endTime = id(end_minute) +  id(end_hour)*60;
+            if (currentTime >= startTime && currentTime <= endTime) {
+                auto call = id(light_led)->turn_on();
+                call.perform();
+            } else {
+               auto call = id(light_led)->turn_off();
+               call.perform();
+            }
+
+
+  on_loop:
+    then:
+        - lambda: |-
+            auto time = id(sntp_time).now();
+            
+            if (time.minute == id(start_minute) && time.hour == id(start_hour)  && time.second==0 ){
+                auto call = id(light_led)->turn_on();
+                call.perform();
+            }
+            if (time.minute == id(end_minute) && time.hour == id(end_hour) && time.second==0 ){
+                auto call = id(light_led).turn_off();
+                call.perform();
+            }
+
+
+
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+
+ota:
+  password: ""
+
+wifi:
+  ssid: "TP-LINK_2.4"
+  password: "caciottinatuttook"
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Sottovasoluminoso"
+    password: "A6VjPzbKbqdb"
+
+captive_portal:
+
+output:
+  - platform: ledc
+    pin: GPIO27
+    id: gpio_27
+
+# Example usage in a light
+light:
+  - platform: monochromatic
+    output: gpio_27
+    name: "Light"
+    id: "light_led"
+
+globals:
+    - id: start_hour
+      type: int
+      restore_value: yes
+      initial_value: "72"
+    - id: start_minute
+      type: int
+      restore_value: yes
+      initial_value: "02"
+    - id: end_hour
+      type: int
+      restore_value: yes
+      initial_value: "22"
+    - id: end_minute
+      type: int
+      restore_value: yes
+      initial_value: "0"
+      
+
+
+time:
+    - platform: sntp
+      id: sntp_time
+
+api:
+    password: ""
+    reboot_timeout: 0s
+    services:
+        - service: start_light
+          variables:
+            hour: int
+            minute: int
+          then:
+            - globals.set:
+                id: start_minute
+                value: !lambda 'return minute;'
+            - globals.set:
+                id: start_hour
+                value: !lambda 'return hour;'
+            - logger.log:
+                format: "set start light  %d:%d"
+                args: [ 'hour', 'minute' ]
+        - service: end_light
+          variables:
+            hour: int
+            minute: int
+          then:
+            - globals.set:
+                id: end_minute
+                value: !lambda 'return minute;'
+            - globals.set:
+                id: end_hour
+                value: !lambda 'return hour;'
+            - logger.log:
+                format: "set end light  %d:%d"
+                args: [ 'id(end_hour)', 'id(end_minute)' ]
+
