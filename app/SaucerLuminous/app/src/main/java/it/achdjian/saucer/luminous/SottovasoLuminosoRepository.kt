@@ -57,11 +57,12 @@ class LuminousSaucer(applicaion: Application) : AndroidViewModel(applicaion) {
                             discoveredChannel.send(it)
                         }
                     }
+
                 }
             }
 
             override fun onServiceLost(service: NsdServiceInfo?) {
-                Log.e(TAG, "service lost: $service")
+                Log.d(TAG, "service lost: $service")
             }
 
         }

@@ -58,7 +58,7 @@ fun Int.toProtobuf() : ByteString{
 }
 
 @Suppress("UNCHECKED_CAST")
-class EspHomeProtoBuffer(val service: NsdServiceInfo, val coroutineScope: CoroutineScope) {
+class EspHomeProtoBuffer(val coroutineScope: CoroutineScope) {
     companion object {
         const val MAJOR_API_VERSION=1
         const val MINOR_API_VERSION=7
@@ -69,17 +69,37 @@ class EspHomeProtoBuffer(val service: NsdServiceInfo, val coroutineScope: Corout
         val ENTITIES_LIST_DONE_RESPONSE_ID = ListEntitiesDoneResponse.getDefaultInstance().descriptorForType.toProto().options.getExtension(id)
     }
 
+    lateinit var service: NsdServiceInfo
     private val timeMap = ConcurrentHashMap<Int, Long>()
     private var socket = Socket()
     private val userServices = mutableMapOf<String, ListEntitiesServicesResponse>()
     private val numbers = mutableMapOf<String, ListEntitiesNumberResponse>()
     private val _connected = MutableStateFlow(false)
+    private var password: String? = null
     val connected: StateFlow<Boolean> get() = _connected
 
     val responseChannel = Channel<GeneratedMessageV3>(5)
     private val pingCounter = AtomicInteger(0)
 
-    suspend fun connect(password:String? = null) {
+    suspend fun disconnect() {
+        coroutineScope.launch {
+            try {
+                Log.d(TAG,"Disconnecting")
+                if (socket.isConnected) {
+                    sendRequest(DisconnectRequest.newBuilder().build())
+                    _connected.value = false
+                }
+
+                socket.close()
+            } catch (e:Exception){
+                Log.e(TAG, "error disconnecting: ", e)
+                _connected.value=false
+            }
+        }
+    }
+
+    suspend fun connect(pwd:String? = password) {
+        password = pwd
         if (socket.isConnected){
             socket.close()
         }
@@ -109,6 +129,7 @@ class EspHomeProtoBuffer(val service: NsdServiceInfo, val coroutineScope: Corout
             }
         }catch (e:Exception){
             Log.e(TAG,"error", e)
+            _connected.value = false
         }
     }
 
@@ -116,22 +137,27 @@ class EspHomeProtoBuffer(val service: NsdServiceInfo, val coroutineScope: Corout
         pingCounter.set(0)
         while(true){
             try {
-                val request = PingRequest.newBuilder().build()
-                sendRequest(request)
-                val prevValue = pingCounter.getAndIncrement()
-                delay(5000)
-                if (pingCounter.get() >2){
-                    Log.e(TAG, "Too many missing ping ${pingCounter.get()}")
-                    _connected.value=false
-                    return
-                }
-                if (pingCounter.get() == prevValue ){
-                    pingCounter.set(0)
+                if (_connected.value) {
+                    Log.d(TAG, "Try Ping")
+                    val request = PingRequest.newBuilder().build()
+                    sendRequest(request)
+                    val prevValue = pingCounter.getAndIncrement()
+                    delay(5000)
+                    if (pingCounter.get() >2){
+                        Log.e(TAG, "Too many missing ping ${pingCounter.get()}")
+                        _connected.value=false
+                    }
+                    if (pingCounter.get() == prevValue ){
+                        pingCounter.set(0)
+                    }
+                } else {
+                    Log.d(TAG, "Try to connect again")
+                    connect()
+                    delay(5000)
                 }
             } catch (e:Exception){
                 Log.e(TAG, "Error ping device", e)
                 _connected.value = false
-                return
             }
         }
     }
@@ -160,27 +186,31 @@ class EspHomeProtoBuffer(val service: NsdServiceInfo, val coroutineScope: Corout
 
 
     fun changeBrightness(key:Int, state:Boolean, value: Float?=null){
-        if (!socket.isConnected){
-            return
-        }
-        if (tooManyRequest(key)){
-            return
-        }
-        val request = LightCommandRequest.newBuilder()
-            .setKey(key)
-            .setHasState(true)
-            .setState(state)
-            .setColorModeValue(0)
-            .setHasColorBrightness(false)
-            .setHasBrightness(false)
-            .setHasColorTemperature(false)
+        try {
+            if (!socket.isConnected) {
+                return
+            }
+            if (tooManyRequest(key)) {
+                return
+            }
+            val request = LightCommandRequest.newBuilder()
+                .setKey(key)
+                .setHasState(true)
+                .setState(state)
+                .setColorModeValue(0)
+                .setHasColorBrightness(false)
+                .setHasBrightness(false)
+                .setHasColorTemperature(false)
 
-        value?.let {
-            request.hasBrightness = true
-            request.setBrightness(it)
+            value?.let {
+                request.hasBrightness = true
+                request.setBrightness(it)
+            }
+            sendRequest(request.build())
+        } catch (e:Exception){
+            Log.e(TAG, "Unable to change brightness")
+            _connected.value=false
         }
-        Log.d(TAG, "Request: $request")
-        sendRequest(request.build())
     }
 
     fun getNumberKey(name: String):Int?{
@@ -227,25 +257,18 @@ class EspHomeProtoBuffer(val service: NsdServiceInfo, val coroutineScope: Corout
                         when(responseId){
                             PING_RESPONSE_ID->pingCounter.decrementAndGet()
                             ENTITIES_LIST_DONE_RESPONSE_ID -> {
-                                Log.d(TAG, "List done")
                                 subscribeStates()
                             }
                             ENTITIES_NUMBER_RESPONSE_ID -> {
                                 val entityResponse = response as ListEntitiesNumberResponse
                                 numbers[entityResponse.name] = entityResponse
-                                Log.d(TAG, "number: ${entityResponse.name}")
                             }
                             ENTITIES_SERVICE_RESPONSE_ID->{
                                     val entityResponse = response as ListEntitiesServicesResponse
                                     userServices[entityResponse.name] = entityResponse
-                                    Log.d(TAG, "service: ${entityResponse.name}")
                                 }
                             HA_SERVICE_RESPONSE_ID -> {
                                 val HAService = response as HomeassistantServiceResponse
-                                Log.d(TAG, "HAService Response")
-                                Log.d(TAG, "data: ${HAService.dataList.joinToString { "${it.key} = ${it.value}" }}")
-                                Log.d(TAG, "data: ${HAService.dataTemplateList.joinToString { "${it.key} = ${it.value}" }}")
-                                Log.d(TAG, "data: ${HAService.variablesList.joinToString { "${it.key} = ${it.value}" }}")
                                 }
                             else ->responseChannel.send(response)
                         }
@@ -263,7 +286,6 @@ class EspHomeProtoBuffer(val service: NsdServiceInfo, val coroutineScope: Corout
     private fun <RequestT:GeneratedMessageV3> sendRequest(request:RequestT){
         try {
             val id = request.descriptorForType.toProto().options.getExtension(id)
-            Log.d(TAG, "Send request $id")
             val payload = request.toByteString()
             val lenData = payload.size().toProtobuf()
             val typeData = id.toProtobuf()

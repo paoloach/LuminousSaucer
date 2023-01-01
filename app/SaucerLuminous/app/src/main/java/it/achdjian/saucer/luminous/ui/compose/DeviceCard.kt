@@ -9,7 +9,10 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -28,6 +31,7 @@ import it.achdjian.saucer.luminous.ui.theme.SaucerLuminousTheme
 import java.net.InetAddress
 import java.time.LocalTime
 
+private const val TAG="DeviceCard"
 
 private fun device(name: String): NsdServiceInfo {
     val device = NsdServiceInfo()
@@ -41,6 +45,11 @@ private fun device(name: String): NsdServiceInfo {
 @Composable
 fun MessageCard(device: EspHome,  onBrightnessChange: (Float)->Unit){
     device.connect()
+    if (device.connected.collectAsState().value) {
+        Log.d(TAG, "${device.address} connected")
+    } else {
+        Log.d(TAG, "${device.address} disconnected")
+    }
     val idImg = if (device.lightOn.collectAsState().value)
         R.drawable.saucer
     else
@@ -69,10 +78,10 @@ fun MessageCard(device: EspHome,  onBrightnessChange: (Float)->Unit){
             colors = Material3TimePickerColor.colors()
         ) { time ->
             if (time.hour != device.startHour.value){
-                device.updateEndHour(time.hour)
+                device.updateStartHour(time.hour)
             }
             if (time.minute != device.startMinute.value){
-                device.updateEndHour(time.minute)
+                device.updateStartMinute(time.minute)
             }
         }
     }
@@ -98,18 +107,19 @@ fun MessageCard(device: EspHome,  onBrightnessChange: (Float)->Unit){
                 device.updateEndHour(time.hour)
             }
             if (time.minute != device.endMinute.value){
-                device.updateEndHour(time.minute)
+                device.updateEndMinute(time.minute)
             }
         }
     }
 
     ElevatedCard(modifier = Modifier
-        .background(color = Color(0xCAC4D0))
-
+        .background(color = MaterialTheme.colorScheme.background)
         .width(intrinsicSize = IntrinsicSize.Max)
         .padding(horizontal = 16.dp)
         .height(height = 138.dp) ){
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.background(MaterialTheme.colorScheme.secondaryContainer)) {
+
             Image(
                 painter = painterResource(idImg) ,
                 contentDescription = null,
@@ -121,7 +131,22 @@ fun MessageCard(device: EspHome,  onBrightnessChange: (Float)->Unit){
                     }
 
             )
-            HostInfo(device, onBrightnessChange, {startTimePickerState.show()}, {endTimePickerState.show()})
+            Box(modifier = Modifier.fillMaxSize()) {
+
+                HostInfo(
+                    device,
+                    onBrightnessChange,
+                    { startTimePickerState.show() },
+                    { endTimePickerState.show() })
+                if (!device.connected.collectAsState().value) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RectangleShape)
+                            .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.9f))
+                    )
+                }
+            }
         }
     }
 }
@@ -140,10 +165,12 @@ fun HostInfo(device: EspHome, onBrightnessChange: (Float)->Unit, onStartClick: (
 
         Text(
             text = device.serviceName,
+            color=MaterialTheme.colorScheme.onSecondaryContainer,
             style = MaterialTheme.typography.titleMedium
         )
         Text(
             text = device.address,
+            color=MaterialTheme.colorScheme.onSecondaryContainer,
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.padding(bottom = 3.dp)
         )

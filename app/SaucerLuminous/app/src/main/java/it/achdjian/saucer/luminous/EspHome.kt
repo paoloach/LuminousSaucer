@@ -26,8 +26,6 @@ class EspHome : ViewModel() {
     var device:NsdServiceInfo?=null
     val serviceName : String get() = device?.serviceName ?: "undefined"
     val address get() = device?.host?.hostAddress ?: "unknown"
-    private val _connected = MutableStateFlow(false)
-    val connected: StateFlow<Boolean> get() = _connected
 
     private val _lightOn = MutableStateFlow(false)
     val lightOn: StateFlow<Boolean> get() = _lightOn
@@ -46,15 +44,14 @@ class EspHome : ViewModel() {
     private val _lightValue = MutableStateFlow(0.0f)
     val lightValue: StateFlow<Float> get() = _lightValue
 
-    lateinit var espHomeProtoBuffer: EspHomeProtoBuffer
-
+    val espHomeProtoBuffer =  EspHomeProtoBuffer(viewModelScope)
+    val connected: StateFlow<Boolean> get() = espHomeProtoBuffer.connected
     fun connect() {
-        if (!_connected.value){
+        if (!espHomeProtoBuffer.connected.value){
             viewModelScope.launch(Dispatchers.IO) {
                 device?.let {
-                    espHomeProtoBuffer = EspHomeProtoBuffer(it, viewModelScope)
+                    espHomeProtoBuffer.service = it
                     espHomeProtoBuffer.connect()
-                    _connected.value = espHomeProtoBuffer.connected.value
                     if (espHomeProtoBuffer.connected.value) {
                         parsingResponses()
                     }
@@ -65,20 +62,14 @@ class EspHome : ViewModel() {
 
     fun changeBrightness(value: Float) {
         viewModelScope.launch(Dispatchers.IO) {
-            try {
-                connect()
-                if (_connected.value) {
-                    espHomeProtoBuffer.changeBrightness(key, _lightOn.value, value)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error connectiong to ${device?.serviceName}", e)
-                _connected.value = false
+            connect()
+            if (espHomeProtoBuffer.connected.value) {
+                espHomeProtoBuffer.changeBrightness(key, _lightOn.value, value)
             }
         }
     }
 
     private suspend fun parsingResponses() {
-        Log.d(TAG, "Starting parsing responses")
         viewModelScope.launch ( Dispatchers.IO ){
             while (true) {
                 val message = espHomeProtoBuffer.responseChannel.receive()
@@ -86,7 +77,6 @@ class EspHome : ViewModel() {
                     _lightOn.value = message.state
                     _lightValue.value = message.brightness
                     key = message.key
-                    Log.d(TAG, "lighState: $message")
                 }
                 if (message is NumberStateResponse) {
                     if (message.key == espHomeProtoBuffer.getNumberKey(StartHourSensorName)){
@@ -102,20 +92,12 @@ class EspHome : ViewModel() {
                 }
             }
         }
-        Log.d(TAG, "Parsing responses started")
     }
 
     fun toggle() {
         viewModelScope.launch(Dispatchers.IO) {
-            try {
-                connect()
-                if (_connected.value) {
-                    espHomeProtoBuffer.changeBrightness(key, !_lightOn.value, _lightValue.value)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error connectiong to ${device?.serviceName}", e)
-                _connected.value = false
-            }
+            connect()
+            espHomeProtoBuffer.changeBrightness(key, !_lightOn.value, _lightValue.value)
         }
     }
 
@@ -127,16 +109,9 @@ class EspHome : ViewModel() {
 
     private fun updateTime(sensorName: String, time: Int){
         viewModelScope.launch(Dispatchers.IO) {
-            try {
                 connect()
-                if (_connected.value) {
-                    val key = espHomeProtoBuffer.getNumberKey(sensorName)
-                    key?.let { espHomeProtoBuffer.setNumber(it, time.toFloat())}
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error connectiong to ${device?.serviceName}", e)
-                _connected.value = false
-            }
+                val key = espHomeProtoBuffer.getNumberKey(sensorName)
+                key?.let { espHomeProtoBuffer.setNumber(it, time.toFloat())}
         }
     }
 

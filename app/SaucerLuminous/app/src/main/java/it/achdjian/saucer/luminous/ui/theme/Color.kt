@@ -66,15 +66,15 @@ class SaucerTimePickerColors(
 object Material3TimePickerColor {
     @Composable
     fun colors(
-        activeBackgroundColor: Color = MaterialTheme.colorScheme.secondaryContainer,
+        activeBackgroundColor: Color = MaterialTheme.colorScheme.tertiaryContainer,
         inactiveBackgroundColor: Color =  MaterialTheme.colorScheme.background,
-        activeTextColor: Color =  MaterialTheme.colorScheme.onSecondaryContainer,
+        activeTextColor: Color =  MaterialTheme.colorScheme.onTertiaryContainer,
         inactiveTextColor: Color =MaterialTheme.colorScheme.onBackground,
         inactivePeriodBackground: Color = Color.Transparent,
         selectorColor: Color = MaterialTheme.colorScheme.primary,
-        selectorTextColor: Color = MaterialTheme.colorScheme.onPrimary,
-        headerTextColor: Color = MaterialTheme.colorScheme.onBackground,
-        borderColor: Color = MaterialTheme.colorScheme.onBackground
+        selectorTextColor: Color = MaterialTheme.colorScheme.onTertiary,
+        headerTextColor: Color = MaterialTheme.colorScheme.onTertiaryContainer,
+        borderColor: Color = MaterialTheme.colorScheme.onTertiaryContainer
     ): TimePickerColors {
         return SaucerTimePickerColors(
             activeBackgroundColor = activeBackgroundColor,
