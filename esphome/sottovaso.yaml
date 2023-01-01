@@ -3,12 +3,10 @@ esphome:
   on_boot:
     then:
      - lambda: |-
-            ESP_LOGI("boot",  "set start light  %d:%d", id('start_hour'), id('start_minute'));
-            ESP_LOGI("boot",  "set end light  %d:%d", id('end_hour'), id('end_minute'));
             auto time = id(sntp_time).now();
             auto currentTime = time.minute+time.hour*60;
-            auto startTime = id(start_minute) + id(start_hour)*60;
-            auto endTime = id(end_minute) +  id(end_hour)*60;
+            auto startTime = id(start_minute).state + id(start_hour).state*60;
+            auto endTime = id(end_minute).state +  id(end_hour).state*60;
             if (currentTime >= startTime && currentTime <= endTime) {
                 auto call = id(light_led)->turn_on();
                 call.perform();
@@ -23,11 +21,11 @@ esphome:
         - lambda: |-
             auto time = id(sntp_time).now();
             
-            if (time.minute == id(start_minute) && time.hour == id(start_hour)  && time.second==0 ){
+            if (time.minute == id(start_minute).state && time.hour == id(start_hour).state  && time.second==0 ){
                 auto call = id(light_led)->turn_on();
                 call.perform();
             }
-            if (time.minute == id(end_minute) && time.hour == id(end_hour) && time.second==0 ){
+            if (time.minute == id(end_minute).state && time.hour == id(end_hour).state && time.second==0 ){
                 auto call = id(light_led).turn_off();
                 call.perform();
             }
@@ -69,23 +67,48 @@ light:
     name: "Light"
     id: "light_led"
 
-globals:
-    - id: start_hour
-      type: int
-      restore_value: yes
-      initial_value: "72"
-    - id: start_minute
-      type: int
-      restore_value: yes
-      initial_value: "02"
-    - id: end_hour
-      type: int
-      restore_value: yes
-      initial_value: "22"
-    - id: end_minute
-      type: int
-      restore_value: yes
-      initial_value: "0"
+number:
+  - platform: template
+    name: start_hour
+    min_value: 0
+    max_value: 23
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 7
+    unit_of_measurement: "h"
+    id: start_hour
+  - platform: template
+    name: start_minute
+    min_value: 0
+    max_value: 59
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 0
+    unit_of_measurement: "m"
+    id: start_minute
+  - platform: template
+    name: end_hour
+    min_value: 0
+    max_value: 23
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 22
+    unit_of_measurement: "h"
+    id: end_hour
+  - platform: template
+    name: end_minute
+    min_value: 0
+    max_value: 59
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 00
+    unit_of_measurement: "m"
+    id: end_minute    
+
       
 
 
@@ -102,10 +125,10 @@ api:
             hour: int
             minute: int
           then:
-            - globals.set:
+            - number.set:
                 id: start_minute
                 value: !lambda 'return minute;'
-            - globals.set:
+            - number.set:
                 id: start_hour
                 value: !lambda 'return hour;'
             - logger.log:
@@ -116,10 +139,10 @@ api:
             hour: int
             minute: int
           then:
-            - globals.set:
+            - number.set:
                 id: end_minute
                 value: !lambda 'return minute;'
-            - globals.set:
+            - number.set:
                 id: end_hour
                 value: !lambda 'return hour;'
             - logger.log:

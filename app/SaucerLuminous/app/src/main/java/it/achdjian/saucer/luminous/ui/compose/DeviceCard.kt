@@ -2,29 +2,31 @@ package it.achdjian.saucer.luminous.ui.compose
 
 import android.net.nsd.NsdServiceInfo
 import android.util.Log
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ShoppingCart
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
+import com.vanpra.composematerialdialogs.MaterialDialog
+import com.vanpra.composematerialdialogs.datetime.time.TimePickerColors
+import com.vanpra.composematerialdialogs.datetime.time.timepicker
+import com.vanpra.composematerialdialogs.rememberMaterialDialogState
+import com.vanpra.composematerialdialogs.title
 import it.achdjian.saucer.luminous.EspHome
 import it.achdjian.saucer.luminous.R
+import it.achdjian.saucer.luminous.ui.theme.Material3TimePickerColor
 import it.achdjian.saucer.luminous.ui.theme.SaucerLuminousTheme
-import java.net.Inet4Address
 import java.net.InetAddress
+import java.time.LocalTime
 
 
 private fun device(name: String): NsdServiceInfo {
@@ -37,14 +39,73 @@ private fun device(name: String): NsdServiceInfo {
 
 
 @Composable
-fun MessageCard(device: EspHome){
+fun MessageCard(device: EspHome,  onBrightnessChange: (Float)->Unit){
     device.connect()
-    val idImg = if (device.connected)
-        R.drawable.basilico
+    val idImg = if (device.lightOn.collectAsState().value)
+        R.drawable.saucer
     else
-        R.drawable.basilico_dark
+        R.drawable.saucer_black
+    val openDialog = rememberSaveable{mutableStateOf(false) }
+    val startTimePickerState = rememberMaterialDialogState()
+    val endTimePickerState = rememberMaterialDialogState()
+    val startTime = LocalTime.of(device.startHour.collectAsState().value, device.startMinute.collectAsState().value)
+    val endTimeTime = LocalTime.of(device.endHour.collectAsState().value, device.endMinute.collectAsState().value)
+
+    MaterialDialog(
+        dialogState = startTimePickerState,
+        buttons = {
+            positiveButton("Ok"){
+                openDialog.value=false
+            }
+            negativeButton("Cancel"){
+                openDialog.value=false
+            }
+        }
+    ) {
+        timepicker(is24HourClock = true,
+            initialTime = startTime,
+            title = "Select start time",
+            waitForPositiveButton = true,
+            colors = Material3TimePickerColor.colors()
+        ) { time ->
+            if (time.hour != device.startHour.value){
+                device.updateEndHour(time.hour)
+            }
+            if (time.minute != device.startMinute.value){
+                device.updateEndHour(time.minute)
+            }
+        }
+    }
+
+    MaterialDialog(
+        dialogState = endTimePickerState,
+        buttons = {
+            positiveButton("Ok"){
+                openDialog.value=false
+            }
+            negativeButton("Cancel"){
+                openDialog.value=false
+            }
+        }
+    ) {
+        timepicker(is24HourClock = true,
+            initialTime = endTimeTime,
+            title = "Select end time",
+            waitForPositiveButton = true,
+            colors = Material3TimePickerColor.colors()
+        ) { time ->
+            if (time.hour != device.endHour.value){
+                device.updateEndHour(time.hour)
+            }
+            if (time.minute != device.endMinute.value){
+                device.updateEndHour(time.minute)
+            }
+        }
+    }
+
     ElevatedCard(modifier = Modifier
         .background(color = Color(0xCAC4D0))
+
         .width(intrinsicSize = IntrinsicSize.Max)
         .padding(horizontal = 16.dp)
         .height(height = 138.dp) ){
@@ -55,16 +116,26 @@ fun MessageCard(device: EspHome){
                 modifier = Modifier
                     .defaultMinSize(minWidth = 100.dp)
                     .padding(top = 16.dp, bottom = 16.dp, start = 16.dp)
+                    .clickable {
+                        device.toggle()
+                    }
 
             )
-            HostInfo(device)
+            HostInfo(device, onBrightnessChange, {startTimePickerState.show()}, {endTimePickerState.show()})
         }
     }
 }
 
 @Composable
-fun HostInfo(device: EspHome){
+fun HostInfo(device: EspHome, onBrightnessChange: (Float)->Unit, onStartClick: ()->Unit,onEndClick: ()->Unit){
+    val brightness = device.lightValue.collectAsState().value
+    val startHour = device.startHour.collectAsState().value
+    val endHour = device.endHour.collectAsState().value
+    val startMinute= device.startMinute.collectAsState().value
+    val endMinute = device.endMinute.collectAsState().value
 
+    val startTime = startHour.toString().padStart(2,'0') +":" + startMinute.toString().padStart(2, '0')
+    val endTime = endHour.toString().padStart(2,'0') +":" + endMinute.toString().padStart(2, '0')
     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
 
         Text(
@@ -76,9 +147,11 @@ fun HostInfo(device: EspHome){
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.padding(bottom = 3.dp)
         )
-        DayAndNight("07:00", "10:00")
-        Slider(value = 0.25f, onValueChange = {},
-            modifier = Modifier.requiredWidth(IntrinsicSize.Max).width(200.dp))
+        DayAndNight(startTime, endTime, onStartClick, onEndClick)
+        Slider(value = brightness, onValueChange = onBrightnessChange,
+            modifier = Modifier
+                .requiredWidth(IntrinsicSize.Max)
+                .width(200.dp))
     }
 }
 
@@ -98,7 +171,9 @@ fun ListDevice(devices: Collection<NsdServiceInfo>, viewModelProvider: ViewModel
                     val espHome = viewModelProvider[device.serviceName, EspHome::class.java]
                     espHome.device = device
                     Log.d("MAIN", "device: ${device.serviceName}")
-                    MessageCard(espHome)
+                    MessageCard(espHome){
+                        espHome.changeBrightness(it)
+                    }
                 }
             }
         }
@@ -113,7 +188,7 @@ fun PreviewMessage() {
      val espHome: EspHome = EspHome()
     espHome.device =  device("sottovasoluminoso")
 
-    MessageCard(device = espHome)
+    MessageCard(device = espHome, {})
 }
 
 
