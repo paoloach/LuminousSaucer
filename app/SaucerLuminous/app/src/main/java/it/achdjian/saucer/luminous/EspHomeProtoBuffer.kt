@@ -138,7 +138,6 @@ class EspHomeProtoBuffer(val coroutineScope: CoroutineScope) {
         while(true){
             try {
                 if (_connected.value) {
-                    Log.d(TAG, "Try Ping")
                     val request = PingRequest.newBuilder().build()
                     sendRequest(request)
                     val prevValue = pingCounter.getAndIncrement()
@@ -151,7 +150,6 @@ class EspHomeProtoBuffer(val coroutineScope: CoroutineScope) {
                         pingCounter.set(0)
                     }
                 } else {
-                    Log.d(TAG, "Try to connect again")
                     connect()
                     delay(5000)
                 }
