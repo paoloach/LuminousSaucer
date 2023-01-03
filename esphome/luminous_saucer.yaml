@@ -1,5 +1,5 @@
 esphome:
-  name: luminousSaucer
+  name: sottovasoluminoso
   on_boot:
     then:
      - lambda: |-

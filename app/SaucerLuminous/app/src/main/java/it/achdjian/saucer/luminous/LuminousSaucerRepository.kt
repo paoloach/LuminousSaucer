@@ -15,7 +15,6 @@ import kotlinx.coroutines.sync.Semaphore
 
 private const val TAG="Zeroconf"
 const val SERVICE_TYPE="_esphomelib._tcp"
-const val SERVICE_NAME="sottovasoluminoso"
 
 
 class LuminousSaucer(applicaion: Application) : AndroidViewModel(applicaion) {
@@ -49,7 +48,7 @@ class LuminousSaucer(applicaion: Application) : AndroidViewModel(applicaion) {
             override fun onServiceFound(service: NsdServiceInfo?) {
                 service?.let {
                     Log.d(TAG, "Found service: ${service.serviceName}")
-                    if (service.serviceName.startsWith("sottovasoluminoso")) {
+                    if (service.serviceName.startsWith("luminousSaucer")) {
                         viewModelScope.launch {
                             discoveredChannel.send(it)
                         }
