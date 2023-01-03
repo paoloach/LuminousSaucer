@@ -12,5 +12,5 @@ The project contains a 3d STL file for allow you to print the saucer and the lig
 
 something like
 
-![Luminous Saucer](/assets/saucer.jpg)
+![Luminous Saucer](/assets/saucer.png)
 
