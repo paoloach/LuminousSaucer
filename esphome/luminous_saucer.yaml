@@ -45,13 +45,10 @@ ota:
   password: ""
 
 wifi:
-  ssid: "TP-LINK_2.4"
-  password: "caciottinatuttook"
-
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
-    ssid: "Sottovasoluminoso"
-    password: "A6VjPzbKbqdb"
+    ssid: "luminousSaucer"
+    password: "luminousSaucer"
 
 captive_portal:
 
